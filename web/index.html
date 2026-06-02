@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Status</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭘</text></svg>">
+<style>
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --text-dim:  #7d8590;
+  --red:       #f85149;
+  --yellow:    #d29922;
+  --green:     #3fb950;
+  --grey:      #484f58;
+  --red-bg:    rgba(248,81,73,.08);
+  --yellow-bg: rgba(210,153,34,.08);
+  --green-bg:  rgba(63,185,80,.08);
+  --grey-bg:   rgba(72,79,88,.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+header h1 .icon { opacity: 0.6; margin-right: 6px; }
+#clock {
+  font-size: 14px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Source badges bar */
+#sources-bar {
+  display: flex;
+  gap: 12px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.source-badge .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--grey);
+  transition: background .3s;
+}
+.source-badge.connected .dot { background: var(--green); }
+.source-badge.error .dot { background: var(--red); }
+
+/* Main */
+main {
+  flex: 1;
+  padding: 16px 24px;
+  overflow-y: auto;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.empty-state .icon { font-size: 32px; margin-bottom: 12px; opacity: .4; }
+
+/* Agent row */
+.agent-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  transition: background .2s;
+  cursor: default;
+}
+.agent-row:hover { background: var(--surface); }
+
+/* Status dot */
+.agent-row .status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  transition: background .3s, box-shadow .3s;
+  justify-self: center;
+}
+.agent-row[data-status="working"] .status-dot {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+  animation: pulse-red 2s ease-in-out infinite;
+}
+.agent-row[data-status="waiting"] .status-dot {
+  background: var(--yellow);
+  box-shadow: 0 0 6px rgba(210,153,34,.5);
+}
+.agent-row[data-status="idle"] .status-dot {
+  background: var(--green);
+}
+.agent-row[data-status="offline"] .status-dot {
+  background: var(--grey);
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 4px var(--red); }
+  50%      { box-shadow: 0 0 12px var(--red); }
+}
+
+/* Agent info */
+.agent-info { min-width: 0; }
+.agent-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-meta .source-tag {
+  color: var(--text-dim);
+  opacity: .7;
+}
+.agent-meta .intent {
+  color: var(--text);
+  opacity: .8;
+}
+.agent-meta .autopilot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #58a6ff;
+  background: rgba(88,166,255,.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  letter-spacing: .3px;
+}
+
+/* Agent stats (right side) */
+.agent-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.duration { font-weight: 500; }
+.agent-row[data-status="working"] .duration { color: var(--red); }
+.agent-row[data-status="waiting"] .duration { color: var(--yellow); }
+.agent-row[data-status="idle"]    .duration { color: var(--green); }
+.agent-row[data-status="offline"] .duration { color: var(--grey); }
+.heartbeat { color: var(--text-dim); font-size: 12px; }
+
+/* Footer */
+footer {
+  padding: 10px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+footer .actions { display: flex; gap: 16px; }
+footer button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all .2s;
+}
+footer button:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  header, #sources-bar, main, footer { padding-left: 12px; padding-right: 12px; }
+  .agent-row { grid-template-columns: 16px 1fr auto; gap: 8px; padding: 8px; }
+  .agent-stats { gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="icon">⭘</span>Agent Status</h1>
+  <time id="clock"></time>
+</header>
+
+<div id="sources-bar"></div>
+
+<main id="agent-list">
+  <div class="empty-state" id="empty">
+    <div class="icon">⭘</div>
+    <div>No agents connected</div>
+  </div>
+</main>
+
+<footer>
+  <div id="stats">—</div>
+  <div class="actions">
+    <button onclick="refreshAll()" title="Refresh">↻ Refresh</button>
+    <button onclick="deleteOffline()" title="Delete offline agents">✕ Del Offline</button>
+  </div>
+</footer>
+
+<script>
+// ── Configuration ──────────────────────────────────────────────
+// Each source maps to an nginx reverse-proxy path → upstream Status Service.
+// Add/remove entries here to monitor more machines.
+const SOURCES = [
+  { name: 'local', path: '/api/local' },
+];
+
+const TOKEN = '';  // Set if AGENT_STATUS_TOKEN is configured
+
+// ── State ──────────────────────────────────────────────────────
+const agents = new Map();   // key → { data, source, statusSince, lastHb, el }
+const sourceStatus = {};    // name → 'connecting' | 'connected' | 'error'
+
+// ── Clock ──────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-GB', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Source badges ──────────────────────────────────────────────
+function renderSourceBadges() {
+  const bar = document.getElementById('sources-bar');
+  bar.innerHTML = '';
+  for (const src of SOURCES) {
+    const badge = document.createElement('div');
+    badge.className = 'source-badge';
+    badge.id = `src-${src.name}`;
+    badge.innerHTML = `<span class="dot"></span>${src.name}`;
+    bar.appendChild(badge);
+  }
+}
+renderSourceBadges();
+
+function setSourceStatus(name, status) {
+  sourceStatus[name] = status;
+  const el = document.getElementById(`src-${name}`);
+  if (el) {
+    el.className = 'source-badge ' + status;
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function nsKey(sourceName, agentId) {
+  return SOURCES.length > 1 ? `${sourceName}|${agentId}` : agentId;
+}
+
+function fmtDuration(seconds) {
+  const s = Math.floor(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m${String(s%60).padStart(2,'0')}s`;
+  return `${Math.floor(s/3600)}h${String(Math.floor((s%3600)/60)).padStart(2,'0')}m`;
+}
+
+function headers() {
+  const h = { 'Accept': 'text/event-stream' };
+  if (TOKEN) h['Authorization'] = `Bearer ${TOKEN}`;
+  return h;
+}
+
+// ── DOM ────────────────────────────────────────────────────────
+const listEl = document.getElementById('agent-list');
+const emptyEl = document.getElementById('empty');
+
+function updateEmpty() {
+  emptyEl.style.display = agents.size === 0 ? 'flex' : 'none';
+}
+
+function createAgentRow(key) {
+  const row = document.createElement('div');
+  row.className = 'agent-row';
+  row.dataset.status = 'offline';
+  row.innerHTML = `
+    <div class="status-dot"></div>
+    <div class="agent-info">
+      <div class="agent-name"></div>
+      <div class="agent-meta"></div>
+    </div>
+    <div class="agent-stats">
+      <span class="duration"></span>
+      <span class="heartbeat"></span>
+    </div>
+  `;
+  listEl.appendChild(row);
+  return row;
+}
+
+function updateAgentRow(key) {
+  const agent = agents.get(key);
+  if (!agent) return;
+  const { data, source, statusSince, el } = agent;
+
+  el.dataset.status = data.status || 'offline';
+
+  const nameEl = el.querySelector('.agent-name');
+  nameEl.textContent = data.name || data.host || data.agent_id?.substring(0, 16) || key;
+
+  const metaEl = el.querySelector('.agent-meta');
+  const parts = [];
+  if (SOURCES.length > 1 && source) parts.push(`<span class="source-tag">${source}</span>`);
+  if (data.autopilot) parts.push(`<span class="autopilot-badge">⚡ autopilot</span>`);
+  if (data.intent) parts.push(`<span class="intent">${escHtml(data.intent)}</span>`);
+  metaEl.innerHTML = parts.join(' · ');
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Update durations & heartbeats every second
+setInterval(() => {
+  const now = Date.now() / 1000;
+  for (const [key, agent] of agents) {
+    const dur = now - agent.statusSince;
+    const hb = now - agent.lastHb;
+    agent.el.querySelector('.duration').textContent = fmtDuration(dur);
+    agent.el.querySelector('.heartbeat').textContent = `♥ ${Math.floor(hb)}s`;
+  }
+  updateStats();
+}, 1000);
+
+function updateStats() {
+  const counts = { working: 0, waiting: 0, idle: 0, offline: 0 };
+  for (const a of agents.values()) counts[a.data.status] = (counts[a.data.status] || 0) + 1;
+  const total = agents.size;
+  document.getElementById('stats').textContent =
+    `${total} agent${total !== 1 ? 's' : ''} · ` +
+    `${counts.working} working · ${counts.waiting} waiting · ` +
+    `${counts.idle} idle · ${counts.offline} offline`;
+}
+
+// ── Agent upsert / remove ──────────────────────────────────────
+function upsertAgent(key, data, sourceName) {
+  const now = Date.now() / 1000;
+  let agent = agents.get(key);
+  if (!agent) {
+    const el = createAgentRow(key);
+    agent = { data, source: sourceName, statusSince: now, lastHb: now, el };
+    agents.set(key, agent);
+    updateEmpty();
+  } else {
+    if (data.status !== agent.data.status) {
+      agent.statusSince = now;
+    }
+    agent.data = { ...agent.data, ...data };
+    agent.lastHb = now;
+    if (sourceName) agent.source = sourceName;
+  }
+  updateAgentRow(key);
+}
+
+function removeAgent(key) {
+  const agent = agents.get(key);
+  if (agent) {
+    agent.el.remove();
+    agents.delete(key);
+    updateEmpty();
+  }
+}
+
+// ── SSE ────────────────────────────────────────────────────────
+function connectSSE(source) {
+  const { name, path } = source;
+  setSourceStatus(name, 'connecting');
+
+  // EventSource doesn't support custom headers, so we use fetch for SSE
+  const controller = new AbortController();
+
+  async function connect() {
+    try {
+      const resp = await fetch(`${path}/events`, {
+        headers: TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {},
+        signal: controller.signal,
+      });
+
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+
+      setSourceStatus(name, 'connected');
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const raw = line.substring(5).trim();
+            if (!raw) continue;
+            try {
+              const data = JSON.parse(raw);
+              const aid = data.agent_id;
+              if (!aid) continue;
+              const key = nsKey(name, aid);
+              if (data.event === 'removed') {
+                removeAgent(key);
+              } else {
+                upsertAgent(key, data, name);
+              }
+            } catch (e) { /* ignore parse errors */ }
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      setSourceStatus(name, 'error');
+    }
+
+    // Reconnect after delay
+    if (!controller.signal.aborted) {
+      setTimeout(() => connect(), 3000);
+    }
+  }
+
+  connect();
+  return controller;
+}
+
+// ── Initial fetch ──────────────────────────────────────────────
+async function fetchInitial(source) {
+  try {
+    const resp = await fetch(`${source.path}/status`, {
+      headers: TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {},
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const agentData of Object.values(data.agents || {})) {
+        const aid = agentData.agent_id;
+        if (aid) {
+          upsertAgent(nsKey(source.name, aid), agentData, source.name);
+        }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ── Actions ────────────────────────────────────────────────────
+async function refreshAll() {
+  await Promise.allSettled(SOURCES.map(src => fetchInitial(src)));
+}
+
+async function deleteOffline() {
+  // Remove offline rows from DOM immediately (optimistic)
+  for (const [key, agent] of [...agents]) {
+    if (agent.data.status === 'offline') removeAgent(key);
+  }
+  // Send DELETE to all sources in parallel with timeout
+  await Promise.allSettled(SOURCES.map(src =>
+    fetch(`${src.path}/agents/offline`, {
+      method: 'DELETE',
+      headers: TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {},
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {})
+  ));
+}
+
+// ── Init ───────────────────────────────────────────────────────
+(async () => {
+  // Fetch initial state from all sources
+  await Promise.all(SOURCES.map(fetchInitial));
+  // Start SSE listeners
+  for (const src of SOURCES) connectSSE(src);
+})();
+</script>
+</body>
+</html>
