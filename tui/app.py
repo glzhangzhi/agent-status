@@ -1,13 +1,17 @@
 """Agent Status TUI — Textual app with SSE subscription.
 
-Supports multiple Status Service sources via AGENT_STATUS_URLS (comma-separated).
+Supports multiple Status Service sources via config.yaml or AGENT_STATUS_URLS env var.
 """
 
 import asyncio
 import json
-import os
+import sys
 import time
+from pathlib import Path
 from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import cfg
 
 import httpx
 from textual.app import App, ComposeResult
@@ -15,33 +19,13 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static, Header, Footer
 
-# --- Config ---
+# --- Config (from unified config.yaml) ---
 
-STATUS_PORT = 7890
-
-
-def _parse_urls() -> list[str]:
-    """Parse status service URLs.
-
-    Priority:
-      1. AGENT_STATUS_URLS env var (comma-separated)
-      2. AGENT_STATUS_URL env var (single)
-      3. Default: localhost:7890
-    """
-    urls_str = os.environ.get("AGENT_STATUS_URLS", "")
-    if urls_str:
-        return [u.strip().rstrip("/") for u in urls_str.split(",") if u.strip()]
-
-    single = os.environ.get("AGENT_STATUS_URL", "")
-    if single:
-        return [single.rstrip("/")]
-
-    return [f"http://localhost:{STATUS_PORT}"]
-
-
-STATUS_URLS = _parse_urls()
-STATUS_TOKEN = os.environ.get("AGENT_STATUS_TOKEN", "")
-MULTI_SOURCE = len(STATUS_URLS) > 1
+STATUS_URLS = cfg.tui_urls
+STATUS_TOKEN = cfg.token
+MULTI_SOURCE = cfg.tui_multi_source
+MACHINES = cfg.tui_machines
+LOCAL_MACHINE_NAME = cfg.tui_local_machine_name
 
 
 def _headers() -> dict:
@@ -165,11 +149,11 @@ class AgentStatusApp(App):
 
     @staticmethod
     def _source_label(url: str) -> str:
-        """Map URL to friendly label."""
+        """Map URL to friendly machine name."""
         host = urlparse(url).hostname or url
         if host in ("localhost", "127.0.0.1", "::1"):
-            return "local"
-        return host
+            return LOCAL_MACHINE_NAME
+        return MACHINES.get(host, host)
 
     async def action_refresh(self):
         await self._initial_fetch_all()

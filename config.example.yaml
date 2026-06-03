@@ -1,0 +1,58 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Agent Status — Configuration
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+#  Copy this file to config.yaml and edit as needed.
+#  Environment variables still work as overrides:
+#    AGENT_STATUS_TOKEN, AGENT_STATUS_URL,
+#    AGENT_STATUS_URLS, POLL_INTERVAL
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Shared auth token for all components (empty = no auth)
+token: ""
+
+# ── Status Service (FastAPI) ──────────────────────────
+service:
+  host: "0.0.0.0"
+  port: 7890
+  heartbeat_timeout: 30   # seconds without heartbeat → agent marked offline
+  check_interval: 5       # seconds between timeout checks
+
+# ── tmux Poller ───────────────────────────────────────
+poller:
+  service_url: "http://localhost:7890"   # Status Service URL
+  poll_interval: 3         # seconds between tmux captures
+  heartbeat_interval: 10   # seconds between heartbeat POSTs
+  discover_interval: 30    # seconds between auto-discovery scans
+
+# ── TUI Dashboard ────────────────────────────────────
+tui:
+  # Explicit Status Service URLs (overrides auto-discovery)
+  urls:
+    - "http://localhost:7890"
+    # - "http://192.168.1.100:7890"
+
+  # Network machine name map — IP → friendly name (for source labels)
+  # machines:
+  #   "100.79.80.33": "myoracle"
+  #   "100.72.178.83": "workstation"
+
+  # IPs of machines running Status Service (for auto-discovery when urls is empty)
+  # agent_machine_ips:
+  #   - "100.79.80.33"
+  #   - "100.72.178.83"
+
+# ── MCP Server ────────────────────────────────────────
+mcp:
+  service_url: "http://localhost:7890"
+  heartbeat_interval: 10
+
+# ── Web Dashboard ─────────────────────────────────────
+# Sources map to nginx reverse-proxy paths (see nginx-agent-status.conf)
+web:
+  sources:
+    - name: "local"
+      path: "/api/local"
+    # - name: "remote"
+    #   path: "/api/remote"

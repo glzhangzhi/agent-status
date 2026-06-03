@@ -14,21 +14,25 @@ Status detection rules:
 
 import argparse
 import asyncio
-import os
 import re
 import socket
 import subprocess
+import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import cfg
 
 import httpx
 
-# --- Config ---
+# --- Config (from unified config.yaml) ---
 
-STATUS_URL = os.environ.get("AGENT_STATUS_URL", "http://localhost:7890")
-STATUS_TOKEN = os.environ.get("AGENT_STATUS_TOKEN", "")
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "3"))
-HEARTBEAT_INTERVAL = 10  # seconds between heartbeat POSTs when status unchanged
-DISCOVER_INTERVAL = 30   # seconds between auto-discovery scans
+STATUS_URL = cfg.poller_service_url
+STATUS_TOKEN = cfg.token
+POLL_INTERVAL = cfg.poller_poll_interval
+HEARTBEAT_INTERVAL = cfg.poller_heartbeat_interval
+DISCOVER_INTERVAL = cfg.poller_discover_interval
 HOST = socket.gethostname()
 
 # --- Status detection patterns ---

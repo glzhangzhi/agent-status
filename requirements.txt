@@ -3,3 +3,4 @@ uvicorn
 sse-starlette
 httpx
 textual
+pyyaml

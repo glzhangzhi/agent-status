@@ -1,26 +1,27 @@
 """Agent Status Service — FastAPI + SSE."""
 
 import asyncio
-import os
+import json
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import cfg
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-# --- Web UI ---
+# --- Config (from unified config.yaml) ---
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-
-# --- Config ---
-
-TOKEN = os.environ.get("AGENT_STATUS_TOKEN", "")
-HEARTBEAT_TIMEOUT = 30  # seconds without heartbeat → offline
-CHECK_INTERVAL = 5  # how often to run the timeout checker
+TOKEN = cfg.token
+HEARTBEAT_TIMEOUT = cfg.service_heartbeat_timeout
+CHECK_INTERVAL = cfg.service_check_interval
 
 
 # --- Models ---
@@ -217,8 +218,13 @@ async def events(request: Request, agent_id: Optional[str] = None):
 
 
 def _json_dumps(data: dict) -> str:
-    import json
     return json.dumps(data, ensure_ascii=False)
+
+
+@app.get("/web/config")
+async def web_config():
+    """Serve web UI configuration from config.yaml."""
+    return {"sources": cfg.web_sources, "token": cfg.token}
 
 
 @app.get("/web")
@@ -232,4 +238,4 @@ async def web_ui():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7890)
+    uvicorn.run(app, host=cfg.service_host, port=cfg.service_port)

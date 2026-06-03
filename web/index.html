@@ -257,13 +257,10 @@ footer button:hover {
 
 <script>
 // ── Configuration ──────────────────────────────────────────────
-// Each source maps to an nginx reverse-proxy path → upstream Status Service.
-// Add/remove entries here to monitor more machines.
-const SOURCES = [
-  { name: 'local', path: '/api/local' },
-];
-
-const TOKEN = '';  // Set if AGENT_STATUS_TOKEN is configured
+// Loaded dynamically from /web/config (served by Status Service from config.yaml).
+// Falls back to defaults if fetch fails (e.g. served via nginx directly).
+let SOURCES = [{ name: 'local', path: '/api/local' }];
+let TOKEN = '';
 
 // ── State ──────────────────────────────────────────────────────
 const agents = new Map();   // key → { data, source, statusSince, lastHb, el }
@@ -524,7 +521,20 @@ async function deleteOffline() {
 }
 
 // ── Init ───────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const resp = await fetch('/web/config');
+    if (resp.ok) {
+      const cfg = await resp.json();
+      if (cfg.sources && cfg.sources.length) SOURCES = cfg.sources;
+      if (cfg.token) TOKEN = cfg.token;
+    }
+  } catch (e) { /* use defaults */ }
+}
+
 (async () => {
+  await loadConfig();
+  renderSourceBadges();
   // Fetch initial state from all sources
   await Promise.all(SOURCES.map(fetchInitial));
   // Start SSE listeners

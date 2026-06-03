@@ -32,6 +32,57 @@ pip install -r requirements.txt
 # Requires: tmux, Python 3.11+
 ```
 
+### Configuration
+
+Copy the template and edit:
+
+```bash
+cp config.example.yaml config.yaml
+# Edit config.yaml — set token, port, multi-source URLs, etc.
+```
+
+All components read from this single file. `config.yaml` is gitignored so you can safely store tokens.
+
+<details>
+<summary>config.yaml example</summary>
+
+```yaml
+token: "your-secret-token"   # shared auth (empty = no auth)
+
+service:
+  host: "0.0.0.0"
+  port: 7890
+  heartbeat_timeout: 30
+  check_interval: 5
+
+poller:
+  service_url: "http://localhost:7890"
+  poll_interval: 3
+  heartbeat_interval: 10
+  discover_interval: 30
+
+tui:
+  urls:
+    - "http://localhost:7890"
+    - "http://192.168.1.100:7890"
+  machines:                        # IP → friendly name
+    "192.168.1.100": "remote-box"
+  agent_machine_ips:               # auto-discovery (when urls is empty)
+    - "192.168.1.100"
+
+mcp:
+  service_url: "http://localhost:7890"
+  heartbeat_interval: 10
+
+web:
+  sources:
+    - name: "local"
+      path: "/api/local"
+```
+</details>
+
+> **Backward compatible:** env vars `AGENT_STATUS_TOKEN`, `AGENT_STATUS_URL`, `AGENT_STATUS_URLS`, `POLL_INTERVAL` still work and override config.yaml.
+
 ### Launch (recommended: in tmux)
 
 ```bash
@@ -62,12 +113,11 @@ FastAPI server that aggregates status from pollers and pushes to clients via SSE
 | `POST /disconnect` | Agent offline | `{agent_id}` |
 | `GET /status` | Snapshot all agents | JSON |
 | `GET /events` | SSE stream | Optional `?agent_id=xxx` filter |
+| `GET /web/config` | Web UI config | Returns sources & token from config.yaml |
 | `GET /web` | Serve web dashboard | HTML |
 | `DELETE /agents/offline` | Purge offline agents | — |
 
-**Timeout:** 30s without heartbeat → offline.
-
-**Env vars:** `AGENT_STATUS_TOKEN` (Bearer auth, empty = no auth)
+**Config:** `service.host`, `service.port`, `service.heartbeat_timeout`, `service.check_interval`, `token`
 
 ### 2. tmux Poller (`tmux_poller/poller.py`)
 
@@ -94,7 +144,7 @@ python3 poller.py my-session-1 my-session-2
 python3 poller.py --auto --interval 5
 ```
 
-**Env vars:** `AGENT_STATUS_URL` (default `http://localhost:7890`), `AGENT_STATUS_TOKEN`, `POLL_INTERVAL`
+**Config:** `poller.service_url`, `poller.poll_interval`, `poller.heartbeat_interval`, `poller.discover_interval`, `token`
 
 ### 3. TUI (`tui/app.py`)
 
@@ -111,17 +161,21 @@ Terminal dashboard built with [Textual](https://textual.textualize.io/). Subscri
 
 **Keys:** `q` quit, `r` refresh, `d` delete offline agents
 
-**Multi-source:** Monitor multiple machines by setting `AGENT_STATUS_URLS` (comma-separated):
-```bash
-export AGENT_STATUS_URLS="http://localhost:7890,http://192.168.1.100:7890"
-./start-tui.sh
+**Multi-source:** Monitor multiple machines via `config.yaml`:
+```yaml
+tui:
+  urls:
+    - "http://localhost:7890"
+    - "http://192.168.1.100:7890"
+  machines:
+    "192.168.1.100": "remote-box"
 ```
 
-**Env vars:** `AGENT_STATUS_URLS`, `AGENT_STATUS_URL` (single, fallback), `AGENT_STATUS_TOKEN`
+**Config:** `tui.urls`, `tui.machines`, `tui.agent_machine_ips`, `token`
 
 ### 4. Web UI (`web/index.html`)
 
-Browser-based dashboard with the same functionality as the TUI. Pure frontend, connects via SSE through nginx reverse proxy.
+Browser-based dashboard with the same functionality as the TUI. Connects via SSE through nginx reverse proxy. Config is loaded dynamically from `/web/config`.
 
 Deploy with nginx (`web/nginx-agent-status.conf`):
 ```bash
@@ -130,12 +184,14 @@ sudo ln -sf $(pwd)/web/nginx-agent-status.conf /etc/nginx/sites-enabled/agent-st
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Configure sources in `web/index.html`:
-```javascript
-const SOURCES = [
-  { name: 'local', path: '/api/local' },
-  // { name: 'remote', path: '/api/remote' },
-];
+Configure sources in `config.yaml`:
+```yaml
+web:
+  sources:
+    - name: "local"
+      path: "/api/local"
+    - name: "remote"
+      path: "/api/remote"
 ```
 
 ## Multi-Machine Setup
@@ -161,6 +217,8 @@ Each server runs its own Status Service + Poller. TUI/Web UI subscribes to all s
 
 ```
 agent-status/
+├── config.py               # Unified config loader (YAML → env → defaults)
+├── config.example.yaml     # Config template (copy to config.yaml)
 ├── start-service.sh        # Start Status Service
 ├── start-tui.sh            # Start TUI
 ├── start-poller.sh         # Start tmux Poller
@@ -172,7 +230,7 @@ agent-status/
 ├── tui/
 │   └── app.py              # Textual terminal dashboard
 └── web/
-    ├── index.html           # Browser dashboard (single-page)
+    ├── index.html           # Browser dashboard (loads config from /web/config)
     └── nginx-agent-status.conf  # nginx reverse proxy template
 ```
 
