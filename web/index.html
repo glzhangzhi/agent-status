@@ -265,6 +265,27 @@ let TOKEN = '';
 // ── State ──────────────────────────────────────────────────────
 const agents = new Map();   // key → { data, source, statusSince, lastHb, el }
 const sourceStatus = {};    // name → 'connecting' | 'connected' | 'error'
+let initialLoadDone = false; // suppress sounds during initial fetch
+
+// ── Notification Sound (Web Audio API) ────────────────────────
+let audioCtx = null;
+function playNotification() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Two-tone chime: C5 → E5
+    [523, 659].forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.12 + 0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + i * 0.12);
+      osc.stop(audioCtx.currentTime + i * 0.12 + 0.3);
+    });
+  } catch (e) { /* AudioContext not available */ }
+}
 
 // ── Clock ──────────────────────────────────────────────────────
 function updateClock() {
@@ -399,6 +420,11 @@ function upsertAgent(key, data, sourceName) {
     updateEmpty();
   } else {
     if (data.status !== agent.data.status) {
+      // working → idle/waiting: play notification sound
+      if (initialLoadDone && agent.data.status === 'working'
+          && (data.status === 'idle' || data.status === 'waiting')) {
+        playNotification();
+      }
       agent.statusSince = now;
     }
     agent.data = { ...agent.data, ...data };
@@ -535,8 +561,9 @@ async function loadConfig() {
 (async () => {
   await loadConfig();
   renderSourceBadges();
-  // Fetch initial state from all sources
+  // Fetch initial state from all sources (no sound during initial load)
   await Promise.all(SOURCES.map(fetchInitial));
+  initialLoadDone = true;
   // Start SSE listeners
   for (const src of SOURCES) connectSSE(src);
 })();
